@@ -8,6 +8,7 @@ import qualified Hasql.Transaction.Sessions as G
 import qualified Main.Statements as D
 import qualified Main.Transactions as E
 import qualified Control.Concurrent.Async as F
+import qualified Control.Monad.Catch as Catch
 
 
 main =
@@ -40,7 +41,12 @@ main =
         runTest test =
           test connection1 connection2
         tests =
-          [readAndWriteTransactionsTest, transactionsTest, transactionAndQueryTest]
+          [ readAndWriteTransactionsTest
+          , transactionsTest
+          , transactionAndQueryTest
+          , abandonTest
+          , exceptionTest
+          ]
 
 
 session connection session =
@@ -98,3 +104,33 @@ transactionAndQueryTest connection1 connection2 =
     traceShowM balance1
     traceShowM balance2
     return (balance1 == Just 400 && balance2 == Just (-200))
+
+abandonTest :: Test
+abandonTest connection1 _ =
+  do
+    id1 <- session connection1 (B.statement 0 D.createAccount)
+    Token <- transaction connection1 $ do
+      C.statement (id1, 1) D.modifyBalance
+      C.abandon
+      return Token
+    balance1 <- session connection1 (B.statement id1 D.getBalance)
+    traceShowM balance1
+    return (balance1 == Just 0)
+
+exceptionTest :: Test
+exceptionTest connection1 _ =
+  do
+    id1 <- session connection1 (B.statement 0 D.createAccount)
+    ret1 <- try $ transaction connection1 $ do
+      C.statement (id1, 1) D.modifyBalance
+      Catch.throwM Token
+      return ()
+    balance1 <- transaction connection1 $ do
+      C.statement id1 D.getBalance
+    traceShowM balance1
+    return (ret1 == Left Token && balance1 == Just 0)
+
+data Token = Token
+  deriving (Show, Eq)
+
+instance Exception Token
