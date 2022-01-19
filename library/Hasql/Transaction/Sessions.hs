@@ -2,6 +2,8 @@ module Hasql.Transaction.Sessions
 (
   transaction,
   unpreparedTransaction,
+  A.run,
+  A.runAtMost,
   -- * Transaction settings
   C.Mode(..),
   C.IsolationLevel(..),

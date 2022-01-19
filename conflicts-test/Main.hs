@@ -22,7 +22,7 @@ main =
           A.acquire connectionSettings
           where
             connectionSettings =
-              A.settings "localhost" 5432 "postgres" "" "postgres"
+              A.settings "localhost" 5432 "hasql_test" "hasql_test" "hasql_test"
     release (connection1, connection2) =
       do
         transaction connection1 E.dropSchema

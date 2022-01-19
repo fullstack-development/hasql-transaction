@@ -23,3 +23,17 @@ data IsolationLevel =
   RepeatableRead |
   Serializable
   deriving (Show, Eq, Ord, Enum, Bounded)
+
+-- |
+-- What to do at the end of the transaction.
+data TransactionEnd =
+  -- |
+  -- Commit the transaction and exit.
+  EndCommit |
+  -- |
+  -- Rollback the transaction and try again.
+  EndRetry |
+  -- |
+  -- Rollback the transaction and exit.
+  EndAbandon
+  deriving (Show, Eq, Ord, Enum, Bounded)

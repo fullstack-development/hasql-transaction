@@ -5,6 +5,7 @@ module Hasql.Transaction
   -- * Transaction monad
   Transaction,
   condemn,
+  abandon,
   sql,
   statement,
 )
