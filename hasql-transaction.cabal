@@ -23,6 +23,7 @@ library
   exposed-modules:
     Hasql.Transaction
     Hasql.Transaction.Sessions
+    Hasql.Transaction.Unsafe
   other-modules:
     Hasql.Transaction.Private.Prelude
     Hasql.Transaction.Private.Model
