@@ -16,9 +16,13 @@ import qualified Hasql.Transaction.Private.Sessions as D
 -- Executes multiple queries under the specified mode and isolation level,
 -- while automatically retrying the transaction in case of conflicts.
 -- Thus this abstraction closely reproduces the behaviour of 'STM'.
-newtype Transaction a =
-  Transaction (StateT TransactionEnd B.Session a)
-  deriving (Functor, Applicative, Monad, Catch.MonadThrow, Catch.MonadCatch, Catch.MonadMask)
+newtype TransactionT m a =
+  Transaction (StateT TransactionEnd m a)
+  deriving (Functor, Applicative, Monad, Catch.MonadThrow, Catch.MonadCatch, Catch.MonadMask, B.MonadSession)
+
+deriving instance (MonadError B.QueryError m) => MonadError B.QueryError (TransactionT m)
+
+type Transaction = TransactionT B.Session
 
 instance Semigroup a => Semigroup (Transaction a) where
   (<>) = liftA2 (<>)
@@ -55,22 +59,6 @@ runAtMost (Transaction session) isolation mode preparable maxRetries =
   D.inRetryingTransaction isolation mode (runStateT session EndCommit) preparable maxRetries
 
 -- |
--- Possibly a multi-statement query,
--- which however cannot be parameterized or prepared,
--- nor can any results of it be collected.
-{-# INLINE sql #-}
-sql :: ByteString -> Transaction ()
-sql =
-  Transaction . lift . B.sql
-
--- |
--- Parameters and a specification of the parametric query to apply them to.
-{-# INLINE statement #-}
-statement :: a -> A.Statement a b -> Transaction b
-statement params statement =
-  Transaction . lift $ B.statement params statement
-
--- |
 -- Cause transaction to ultimately roll back and retry.
 {-# INLINE condemn #-}
 condemn :: Transaction ()
@@ -85,13 +73,13 @@ abandon =
   Transaction $ put EndAbandon
 
 -- |
--- Unsafely perform IO in the Transaction monad.
+-- Unsafely perform some actions in the Transaction monad.
 --
 -- Most of the warnings for `GHC.Conc.unsafeIOToSTM` also apply to this
 -- function:
 --
 --   * The transaction code may be re-run multiple times, so you need to be
---     prepared for this if your IO has any side effects.
+--     prepared for this if your action has any side effects.
 --
 --   * The data that was fetched from the database may turn out to be
 --     inconsistent. Invariants that you expect to be true (whether by
@@ -106,7 +94,16 @@ abandon =
 -- by completely dropping its execution, so the exception handlers will work
 -- as usual, and `Control.Monad.Catch.bracket` can be safely relied upon for
 -- proper resource management.
+{-# INLINE unsafeLift #-}
+unsafeLift :: (Monad m) => m a -> TransactionT m a
+unsafeLift act =
+  Transaction $ lift act
+
+-- |
+-- Unsafely perform IO in the Transaction monad.
+--
+-- All of the warnings for `unsafeLift` also apply here.
 {-# INLINE unsafeRunIO #-}
-unsafeRunIO :: IO a -> Transaction a
+unsafeRunIO :: (MonadIO m) => IO a -> TransactionT m a
 unsafeRunIO io =
   Transaction $ liftIO io

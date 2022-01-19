@@ -1,5 +1,6 @@
 module Hasql.Transaction.Unsafe
 (
+  unsafeLift,
   unsafeRunIO,
 )
 where
