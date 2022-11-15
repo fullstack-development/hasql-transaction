@@ -33,14 +33,11 @@ tryTransaction level mode body preparable =
     initTransaction =
       begin
 
-    closeTransaction () (Catch.ExitCaseSuccess (Just (result, EndCommit))) =
-      trySerializableMaybe (commitWith result)
-
-    closeTransaction () (Catch.ExitCaseSuccess (Just (result, EndAbandon))) =
-      abortWith (Just result)
-
-    closeTransaction () _ =
-      abortWith Nothing
+    closeTransaction () exitCase =
+      case exitCase of
+        Catch.ExitCaseSuccess (Just (result, EndCommit)) -> trySerializableMaybe (commitWith result)
+        Catch.ExitCaseSuccess (Just (result, EndAbandon)) -> abortWith (Just result)
+        _ -> abortWith Nothing
 
     insideTransaction () =
         trySerializableMaybe body
@@ -54,31 +51,20 @@ tryTransaction level mode body preparable =
     abortWith result = do
       result <$ statement () (Statements.abortTransaction preparable)
 
-  -- bodyRes <- catchError (fmap Just body) $ \ error -> do
-    -- statement () (Statements.abortTransaction preparable)
-    -- handleTransactionError error $ return Nothing
-
-  -- case bodyRes of
-    -- Just (res, commit) -> catchError (commitOrAbort commit preparable $> Just res) $ \ error -> do
-      -- handleTransactionError error $ return Nothing
-    -- Nothing -> return Nothing
-
--- commitOrAbort commit preparable = if commit
-  -- then statement () (Statements.commitTransaction preparable)
-  -- else statement () (Statements.abortTransaction preparable)
-
 isSerializationError error = case error of
-  QueryError _ _ (ResultError (ServerError "40001" _ _ _)) -> True
+  QueryError _ _ (ResultError (ServerError "40001" _ _ _ _)) -> True
   _ -> False
 
 trySerializableMaybe body =
-  catchError (fmap Just body) $ \error -> case error of
-    QueryError _ _ (ResultError (ServerError "40001" _ _ _)) -> pure Nothing
-    _ -> throwError error
+  catchError (fmap Just body) $ \error ->
+    if isSerializationError error
+      then pure Nothing
+      else throwError error
 
-handleTransactionError error = case error of
-  QueryError _ _ (ResultError (ServerError "40001" _ _ _)) -> pure Nothing
-  error -> throwError error
+handleTransactionError error =
+  if isSerializationError error
+    then pure Nothing
+    else throwError error
 
 retriesExhaustedError :: QueryError
 retriesExhaustedError =

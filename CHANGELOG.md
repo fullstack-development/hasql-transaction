@@ -1,4 +1,4 @@
-# 1.0.1.2
+# 1.0.2
 
 - Use `MonadMask` for opening and closing the transaction.
 - Make `Transaction` a transformer.
